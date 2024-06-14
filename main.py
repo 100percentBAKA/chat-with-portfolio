@@ -71,6 +71,7 @@ if __name__ == "__main__":
 
     # ! LOAD THE SPLITTER
     splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=64)
+    # ? chunk_size=512
 
     # ! SPLIT THE DOCUMENT INTO CHUNKS
     docs_from_pdf = loader.load_and_split(text_splitter=splitter)
@@ -86,9 +87,9 @@ if __name__ == "__main__":
         search_kwargs={"k": 2})  # ? search_kwargs specifies the number of similar chunks/docs to return
 
     # ! CREATING A TEMPLATE
-    prompt_template = """
-    You are an assistant for question-answering tasks, use the following pieces retrieved to answer the questions.
-    If you are unable to obtain any answer from the context to any particular question, you are free to make up your own answer suiting the situation.
+    prompt_template = """You are an assistant for question-answering tasks, use the following pieces retrieved to 
+    answer the questions. If you are unable to obtain any answer from the context to any particular question, 
+    you are free to make up your own answer suiting the situation.
 
     CONTEXT:
     {context}
