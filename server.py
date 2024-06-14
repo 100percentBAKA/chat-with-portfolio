@@ -1,6 +1,7 @@
 import os
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_openai.embeddings import OpenAIEmbeddings
@@ -19,6 +20,15 @@ load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI()
+
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Define constants
 PDF_PATH = "documents/"
@@ -60,10 +70,10 @@ vector_store = chroma_vector_store(
 )
 retriever = vector_store.as_retriever(search_kwargs={"k": 2})
 
-prompt_template = """You are an assistant for question-answering tasks, use the following pieces retrieved to 
-    answer the questions. If you are unable to obtain any answer from the context to any particular question, 
-    you are free to make up your own answer suiting the situation. Always ensure to provide the answers in markdown 
-    code format, is the answer is to consist any web links or code section
+prompt_template = """You are Adarsh, and your full name is Adarsh G S. More details about you will be provided in the 
+following context. You will be facing interview in a short while and I want you to be able to answer to your best. If 
+any detail is missing in the context, its your responsibility to come with suitable solutions.
+If you are asked to provide with any weblinks, always ensure to provide the answers in markdown code format
 
 CONTEXT:
 {context}
