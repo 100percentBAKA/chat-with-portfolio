@@ -89,7 +89,8 @@ if __name__ == "__main__":
     # ! CREATING A TEMPLATE
     prompt_template = """You are an assistant for question-answering tasks, use the following pieces retrieved to 
     answer the questions. If you are unable to obtain any answer from the context to any particular question, 
-    you are free to make up your own answer suiting the situation.
+    you are free to make up your own answer suiting the situation. Always ensure to provide the answers in markdown 
+    code format, is the answer is to consist any web links or code section
 
     CONTEXT:
     {context}
