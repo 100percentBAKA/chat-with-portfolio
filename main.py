@@ -1,121 +1,115 @@
+import os
+from dotenv import load_dotenv
 from langchain_community.chat_models import ChatOllama
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI
+from langchain_chroma import Chroma
+from langchain.schema import embeddings
+from langchain.schema import Document
+from langchain_astradb import AstraDBVectorStore
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_openai import ChatOpenAI
-from langchain.chains import create_retrieval_chain
-from langchain_chroma import Chroma
-from langchain.schema import Document
-from langchain.schema import embeddings
-from langchain.schema import vectorstore
-
-from dotenv import load_dotenv
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 
 load_dotenv()
 
+# ! PRIVATE KEYS
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ASTRA_TOKEN = os.getenv("ASTRA_TOKEN")
+ASTRA_DB_ENDPOINT = os.getenv("ASTRA_DB_ENDPOINT")
+
+# ! CONSTANTS
 RESUME_PDF_PATH = "documents/resume.pdf"
 CHROMA_DB_PATH = "./db"
-
-# llm = ChatOllama(
-#     model="llama3:latest"
-# )
-
-llm = ChatOpenAI(
-    model="gpt-3.5-turbo"
-)
+ASTRA_COLLECTION_NAME = "pdf_db"
 
 
-def load_document(path: str) -> list[Document]:
-    loader = PyPDFLoader(path)
-    return loader.load()
+# ! FUNCTIONS
+def create_llm(selection: str):
+    if selection == "Y":
+        return ChatOllama(model="llama3")
+    else:
+        return ChatOpenAI(api_key=OPENAI_API_KEY, model="gpt-3.5-turbo")
 
 
-def get_embeddings():
-    return OllamaEmbeddings(
-        model="nomic-embed-text"
-    )
+def create_embeddings(selection: str):
+    if selection == "Y":
+        return OllamaEmbeddings(model="nomic-embed-text")
+    else:
+        return OpenAIEmbeddings(api_key=OPENAI_API_KEY)
 
 
-def split_documents(docx: list[Document]):
-    print("Splitting documents")
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000, chunk_overlap=200, add_start_index=True
-    )
-    '''
-        add_start_index=True will ensure that the character at the end of each split, is also included in the next split
-    '''
-    all_splits = text_splitter.split_documents(docx)
-    print("Splitting documents done")
-    return all_splits
-
-
-def to_vector_store(docx: list[Document], embedx: embeddings, path: str):
+def chroma_vector_store(docx: list[Document], embedx: embeddings, path: str):
     return Chroma.from_documents(docx, embedx, persist_directory=path)
 
 
-def make_retriever(store: vectorstore, search_type: str, kwargs: int):
-    return store.as_retriever(
-        search_type=search_type,
-        search_kwargs={"k": kwargs}
+def astra_vector_store(embedx: embeddings, collection_name: str, api_endpoint: str, token: str):
+    return AstraDBVectorStore(
+        embedding=embedx,
+        collection_name=collection_name,
+        api_endpoint=ASTRA_DB_ENDPOINT,
+        token=ASTRA_TOKEN,
     )
 
-
-# result = split_documents(load_document(RESUME_PDF_PATH))
-# print(result[0].metadata)
-
-
-# print(get_embeddings().embed_query("This is a test document")[:5])
-
-# if __name__ == "__main__":
-#     retriever = in_vector_store(
-#         docx=split_documents(load_document(RESUME_PDF_PATH)),
-#         embedx=get_embeddings(),
-#         path=CHROMA_DB_PATH
-#     ).as_retriever(
-#         search_type="similarity",
-#         search_kwargs={"k": 6}
-#     )
-#
-#     retrieved_docx = retriever.invoke("PERSONAL DETAILS")
-#
-#     print(retrieved_docx[0].page_content)
 
 if __name__ == "__main__":
-    system_prompt_str = ("You are an assistant for question-answering tasks. Use the following pieces of retrieved "
-                         "context to answer the question. If you don't know the answer, say that you don't know. Use "
-                         "three sentences maximum and keep the answer concise.\n\n{context}")
+    LOCAL_PERSISTENCE = input("Use Astra DB (y/[N]):") or "N"
+    LLM_SELECTION = input("Use Llama3:7B from Ollama ([Y]/n): ") or "Y"
+    EMBEDDING_SELECTION = input("Use Nomic-embed-text from Ollama ([Y]/n): ") or "Y"
 
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ('system', system_prompt_str),
-            ('human', '{input}')
-        ]
+    # ! CREATING AN LLM
+    llm = create_llm(LLM_SELECTION)
+
+    # ! CHOOSING EMBEDDINGS MODEL
+    embeddings = create_embeddings(EMBEDDING_SELECTION)
+
+    # ! LOADING THE DOCUMENTS
+    loader = PyPDFLoader(RESUME_PDF_PATH)
+
+    # ! LOAD THE SPLITTER
+    splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=64)
+
+    # ! SPLIT THE DOCUMENT INTO CHUNKS
+    docs_from_pdf = loader.load_and_split(text_splitter=splitter)
+
+    # ! CHOOSING VECTOR STORE
+    if LOCAL_PERSISTENCE == "N":
+        vector_store = chroma_vector_store(docs_from_pdf, embeddings, CHROMA_DB_PATH)
+    else:
+        vector_store = astra_vector_store(embeddings, ASTRA_COLLECTION_NAME, ASTRA_DB_ENDPOINT, ASTRA_TOKEN)
+
+    # ! CREATING A RETRIEVER
+    retriever = vector_store.as_retriever(
+        search_kwargs={"k": 2})  # ? search_kwargs specifies the number of similar chunks/docs to return
+
+    # ! CREATING A TEMPLATE
+    prompt_template = """
+    You are an assistant for question-answering tasks, use the following pieces retrieved to answer the questions.
+    If you are unable to obtain any answer from the context to any particular question, you are free to make up your own answer suiting the situation.
+
+    CONTEXT:
+    {context}
+
+    QUESTION: {question}
+
+    YOUR ANSWER:"""
+
+    prompt_template = ChatPromptTemplate.from_template(prompt_template)
+
+    # ! CREATING A CHAIN
+    chain = (
+            {"context": retriever, "question": RunnablePassthrough()}
+            | prompt_template
+            | llm
+            | StrOutputParser()
     )
 
-    # creating the vector store and using it
+    # ! TAKING THE QUERY FROM THE USER
+    query = input("Enter the query: ")
 
-    # vector_store = to_vector_store(
-    #     docx=load_document(RESUME_PDF_PATH),
-    #     embedx=get_embeddings(),
-    #     path=CHROMA_DB_PATH
-    # )
-
-    # using the already existing vector store
-
-    vector_store = Chroma(
-        embedding_function=get_embeddings(),
-        persist_directory=CHROMA_DB_PATH
-    )
-
-    # retriever = make_retriever(vector_store, "mmr", 6)
-    retriever = make_retriever(vector_store, "similarity", 6)
-
-    question_answer_chain = create_stuff_documents_chain(llm, prompt)
-    rag_chain = create_retrieval_chain(retriever, question_answer_chain)
-
-    response = rag_chain.invoke({
-        "input": "What is your name and provide a formal introduction"
-    })
-    print(response["answer"])
+    # ! IMPLEMENTING A STREAM
+    for chunk in chain.stream(query):
+        print(chunk, end="", flush=True)
