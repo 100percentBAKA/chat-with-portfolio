@@ -16,6 +16,8 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
+from langchain_community.embeddings import OllamaEmbeddings
 from pydantic import BaseModel
 
 # Load environment variables
@@ -55,9 +57,19 @@ def create_ollama_llm():
     return ChatOllama(model="llama3")
 
 
+def create_google_llm():
+    return ChatGoogleGenerativeAI(
+        model="gemini-pro"
+    )
+
+
 # Create embeddings
 def create_embeddings():
     return OpenAIEmbeddings(api_key=OPENAI_API_KEY)
+
+
+def create_ollama_embeddings():
+    return OllamaEmbeddings(model="nomic-embed-text")
 
 
 # Create Chroma vector store
@@ -90,7 +102,7 @@ loader = PyPDFLoader(RESUME_PDF_PATH)
 
 splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=64)
 load_docs = loader.load_and_split(text_splitter=splitter)
-vector_store = astra_vector_store(embeddings, ASTRA_COLLECTION_NAME, ASTRA_DB_ENDPOINT, ASTRA_TOKEN, ASTRA_NAMESPACE)
+vector_store = chroma_vector_store(load_docs, embeddings, PERSIST_DB_PATH)
 retriever = vector_store.as_retriever(search_kwargs={"k": 2})
 
 prompt_template = """You are Adarsh, and your full name is Adarsh G S. More details about you will be provided in the 
