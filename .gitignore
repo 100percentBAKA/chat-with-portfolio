@@ -4,3 +4,5 @@
 /.mypy_cache/
 .idea/
 
+/db2/
+/db/

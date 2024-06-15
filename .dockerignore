@@ -1,0 +1,9 @@
+env/
+db/
+db2/
+main.py
+dir_loader.py
+.git
+.gitignore
+LICENSE
+README.md

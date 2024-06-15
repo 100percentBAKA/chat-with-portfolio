@@ -22,7 +22,7 @@ ASTRA_TOKEN = os.getenv("ASTRA_TOKEN")
 ASTRA_DB_ENDPOINT = os.getenv("ASTRA_DB_ENDPOINT")
 
 # ! CONSTANTS
-RESUME_PDF_PATH = "documents/resume.pdf"
+RESUME_PDF_PATH = "documents/resume_merged.pdf"
 CHROMA_DB_PATH = "./db"
 ASTRA_COLLECTION_NAME = "pdf_db"
 
